@@ -186,6 +186,7 @@ typedef struct {
 	cairo_t *cr;
 
 	gx_controller controls[CONTROLS];
+	int block_event;
 	double start_value;
 	gx_scale rescale;
 	gx_controller *sc;
@@ -272,6 +273,7 @@ static LV2UI_Handle instantiate(const struct _LV2UI_Descriptor * descriptor,
 	ui->controls[5] = (gx_controller) {{0.15, 0.15, 0.0, 1.0, 0.01}, {560, 60, 81, 81}, false,"PRESENSE", KNOB, PRESENSE};
 	ui->controls[6] = (gx_controller) {{0.4, 0.4, 0.0, 1.0, 0.01}, {660, 60, 81, 81}, false,"MASTER", KNOB, MASTER};
 
+	ui->block_event = -1;
 	ui->start_value = 0.0;
 	ui->sc = NULL;
 	ui->set_sc = 0;
@@ -658,9 +660,11 @@ static void send_controller_event(gx_plexiUI * const ui, int controller) {
 static void check_value_changed(gx_plexiUI * const ui, int i, const float * const value) {
 	if(fabs(*(value) - ui->controls[i].adj.value)>=0.00001) {
 		ui->controls[i].adj.value = *(value);
-		ui->write_function(ui->controller,ui->controls[i].port,sizeof(float),0,value);
+		if (ui->block_event != ui->controls[i].port)
+			ui->write_function(ui->controller,ui->controls[i].port,sizeof(float),0,value);
 		debug_print("send_controller_event for %i value %f\n",i,*(value));
 		send_controller_event(ui, i);
+		ui->block_event = -1;
 	}
 }
 
@@ -1029,6 +1033,7 @@ static void port_event(LV2UI_Handle handle, uint32_t port_index,
 	float value = *(float*)buffer;
 	for (int i=0;i<CONTROLS;i++) {
 		if (port_index == ui->controls[i].port) {
+			ui->block_event = (int)port_index;
 			check_value_changed(ui, i, &value);
 		}
 	}
